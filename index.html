@@ -70,17 +70,10 @@
     <aside class="sidebar-panel glass-panel">
       <!-- Input Video & Tracking Feedback Section -->
       <section class="panel-section">
-        <h3 class="section-title">📹 姿態追蹤畫面鎖定</h3>
+        <h3 class="section-title">📱 手機鏡頭畫面連線</h3>
         
-        <!-- Video Source Toggle -->
-        <div class="source-selector">
-          <button id="src-webcam" class="source-btn active">📷 視訊鏡頭</button>
-          <button id="src-screen" class="source-btn">🖥️ 螢幕/視窗畫面</button>
-          <button id="src-phone" class="source-btn">📱 手機鏡頭</button>
-        </div>
-
-        <!-- WebRTC Phone Connection Panel (hidden by default) -->
-        <div id="phone-panel" class="phone-panel hidden">
+        <!-- WebRTC Phone Connection Panel -->
+        <div id="phone-panel" class="phone-panel">
           <div class="phone-panel-header">
             <span class="phone-status-dot" id="phone-status-dot"></span>
             <span id="phone-status-text">等待手機連線...</span>
@@ -105,7 +98,7 @@
           <!-- Tracking Overlay Indicators -->
           <div class="video-hud">
             <span id="fps-counter" class="hud-pill">FPS: --</span>
-            <span id="tracking-quality" class="hud-pill quality-good">追蹤中</span>
+            <span id="tracking-quality" class="hud-pill quality-good">等待連線</span>
           </div>
         </div>
       </section>

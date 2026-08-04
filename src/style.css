@@ -238,31 +238,6 @@ body {
   padding-bottom: 8px;
 }
 
-/* Source Selection Buttons */
-.source-selector {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-}
-
-.source-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-glass);
-  color: var(--text-secondary);
-  padding: 8px;
-  border-radius: var(--radius-sm);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.source-btn.active {
-  background: rgba(0, 240, 255, 0.15);
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-}
-
 /* Video Preview Box */
 .video-preview-wrapper {
   position: relative;

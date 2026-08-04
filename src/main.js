@@ -35,69 +35,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     tracker.toggleBindStatus();
   });
 
-  // Source Selector: Webcam vs Screen Share vs Phone
-  const btnWebcam = document.getElementById('src-webcam');
-  const btnScreen = document.getElementById('src-screen');
-  const btnPhone  = document.getElementById('src-phone');
+  // Initialize Mobile Phone Camera Stream directly
+  const roomId = Math.floor(100000 + Math.random() * 900000).toString();
+  const roomIdDisplay = document.getElementById('room-id-display');
+  if (roomIdDisplay) roomIdDisplay.textContent = roomId;
 
-  btnWebcam.addEventListener('click', async () => {
-    btnWebcam.classList.add('active');
-    btnScreen.classList.remove('active');
-    btnPhone.classList.remove('active');
-    document.getElementById('phone-panel').classList.add('hidden');
-    tracker.stopPhoneStream();
-    try {
-      await tracker.startCamera();
-    } catch (err) {
-      console.warn('視訊鏡頭開啟失敗:', err);
-      const trackingQuality = document.getElementById('tracking-quality');
-      if (trackingQuality) trackingQuality.textContent = '無內建鏡頭';
-    }
+  const cameraUrl = `${location.origin}/camera.html?room=${roomId}`;
+  const phoneUrlText = document.getElementById('phone-url-text');
+  if (phoneUrlText) phoneUrlText.textContent = cameraUrl;
+
+  const phoneQrCanvas = document.getElementById('phone-qr-canvas');
+  if (phoneQrCanvas) drawQrCode(phoneQrCanvas, cameraUrl);
+
+  // Start WebRTC receiver for mobile phone camera
+  await tracker.startPhoneStream(roomId, (state) => {
+    updatePhoneStatusUI(state);
   });
-
-  btnScreen.addEventListener('click', async () => {
-    btnScreen.classList.add('active');
-    btnWebcam.classList.remove('active');
-    btnPhone.classList.remove('active');
-    document.getElementById('phone-panel').classList.add('hidden');
-    await tracker.startScreenShare();
-  });
-
-  btnPhone.addEventListener('click', async () => {
-    btnPhone.classList.add('active');
-    btnWebcam.classList.remove('active');
-    btnScreen.classList.remove('active');
-
-    // Generate room ID and show panel
-    const roomId = Math.floor(100000 + Math.random() * 900000).toString();
-    const phonePanel = document.getElementById('phone-panel');
-    phonePanel.classList.remove('hidden');
-    document.getElementById('room-id-display').textContent = roomId;
-
-    // Build camera URL
-    const cameraUrl = `${location.origin}/camera.html?room=${roomId}`;
-    document.getElementById('phone-url-text').textContent = cameraUrl;
-
-    // Draw QR Code on canvas
-    drawQrCode(document.getElementById('phone-qr-canvas'), cameraUrl);
-
-    // Start WebRTC receiver
-    await tracker.startPhoneStream(roomId, (state) => {
-      updatePhoneStatusUI(state);
-    });
-  });
-
-  // Try starting webcam by default (catch error gracefully if PC has no webcam)
-  try {
-    await tracker.startCamera();
-  } catch (err) {
-    console.warn('電腦未偵測到鏡頭，請切換至「📱 手機鏡頭」或「🖥️ 螢幕畫面」:', err);
-    const trackingQuality = document.getElementById('tracking-quality');
-    if (trackingQuality) {
-      trackingQuality.textContent = '無鏡頭 (請選手機/螢幕)';
-      trackingQuality.className = 'hud-pill quality-warn';
-    }
-  }
 
   // Model Preset Selection & Custom VRM Upload
   const modelPresetSelect = document.getElementById('model-preset');
