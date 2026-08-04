@@ -148,6 +148,18 @@ export class MotionTracker {
       console.log('[WebRTC] Received remote track');
       const [remoteStream] = event.streams;
       this.video.srcObject = remoteStream;
+
+      const updateAspect = () => {
+        if (this.video.videoWidth && this.video.videoHeight) {
+          const wrapper = this.video.parentElement;
+          if (wrapper) {
+            wrapper.style.aspectRatio = `${this.video.videoWidth} / ${this.video.videoHeight}`;
+          }
+        }
+      };
+
+      this.video.onloadedmetadata = updateAspect;
+      this.video.onresize = updateAspect;
       this.video.play();
 
       // Start MediaPipe loop on remote stream

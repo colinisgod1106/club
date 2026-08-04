@@ -156,14 +156,17 @@
       border-radius: 16px;
       overflow: hidden;
       border: 1px solid var(--border);
-      aspect-ratio: 9/16;
-      max-height: 35dvh;
+      max-height: 40dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: aspect-ratio 0.3s ease;
     }
 
     #camera-video {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
       transform: scaleX(-1); /* mirror for selfie cam */
     }
 
@@ -453,6 +456,11 @@ async function openCameraStream(facing) {
 
   videoEl.srcObject = localStream;
   videoEl.style.transform = facing === 'user' ? 'scaleX(-1)' : 'none'; // mirror selfie cam
+  videoEl.onloadedmetadata = () => {
+    if (videoEl.videoWidth && videoEl.videoHeight) {
+      document.querySelector('.video-wrapper').style.aspectRatio = `${videoEl.videoWidth} / ${videoEl.videoHeight}`;
+    }
+  };
   videoOverlay.classList.add('hidden');
   log(`鏡頭已開啟 (模式: ${facing === 'user' ? '前置自拍' : '後置鏡頭'})`, 'ok');
 }
