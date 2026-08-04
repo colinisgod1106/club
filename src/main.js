@@ -35,22 +35,87 @@ document.addEventListener('DOMContentLoaded', async () => {
     tracker.toggleBindStatus();
   });
 
-  // Initialize Mobile Phone Camera Stream directly
-  const roomId = Math.floor(100000 + Math.random() * 900000).toString();
-  const roomIdDisplay = document.getElementById('room-id-display');
-  if (roomIdDisplay) roomIdDisplay.textContent = roomId;
+  // --- Phone Stream & Connection Management ---
+  let currentRoomId = Math.floor(100000 + Math.random() * 900000).toString();
 
-  const cameraUrl = `${location.origin}/camera.html?room=${roomId}`;
-  const phoneUrlText = document.getElementById('phone-url-text');
-  if (phoneUrlText) phoneUrlText.textContent = cameraUrl;
+  async function startPhoneConnection(keepRoom = true) {
+    if (!keepRoom) {
+      currentRoomId = Math.floor(100000 + Math.random() * 900000).toString();
+    }
+    const roomIdDisplay = document.getElementById('room-id-display');
+    if (roomIdDisplay) roomIdDisplay.textContent = currentRoomId;
 
-  const phoneQrCanvas = document.getElementById('phone-qr-canvas');
-  if (phoneQrCanvas) drawQrCode(phoneQrCanvas, cameraUrl);
+    // Determine host URL (check custom host input first)
+    const customHostVal = document.getElementById('custom-host-input')?.value?.trim();
+    let baseOrigin = location.origin;
+    if (customHostVal) {
+      baseOrigin = customHostVal.startsWith('http') ? customHostVal : `${location.protocol}//${customHostVal}`;
+    }
 
-  // Start WebRTC receiver for mobile phone camera
-  await tracker.startPhoneStream(roomId, (state) => {
-    updatePhoneStatusUI(state);
+    const cameraUrl = `${baseOrigin}/camera.html?room=${currentRoomId}`;
+    const phoneUrlText = document.getElementById('phone-url-text');
+    if (phoneUrlText) phoneUrlText.textContent = cameraUrl;
+
+    const phoneQrCanvas = document.getElementById('phone-qr-canvas');
+    if (phoneQrCanvas) drawQrCode(phoneQrCanvas, cameraUrl);
+
+    await tracker.startPhoneStream(currentRoomId, (state) => {
+      updatePhoneStatusUI(state);
+    });
+  }
+
+  // --- Source Selection Event Listeners ---
+  const btnPhone = document.getElementById('src-phone');
+  const btnWebcam = document.getElementById('src-webcam');
+  const btnScreen = document.getElementById('src-screen');
+  const phonePanel = document.getElementById('phone-panel');
+
+  btnPhone?.addEventListener('click', async () => {
+    btnPhone.classList.add('active');
+    btnWebcam?.classList.remove('active');
+    btnScreen?.classList.remove('active');
+    phonePanel?.classList.remove('hidden');
+    await startPhoneConnection(true);
   });
+
+  btnWebcam?.addEventListener('click', async () => {
+    btnWebcam.classList.add('active');
+    btnPhone?.classList.remove('active');
+    btnScreen?.classList.remove('active');
+    phonePanel?.classList.add('hidden');
+    tracker.stopPhoneStream();
+    try {
+      await tracker.startCamera();
+    } catch (err) {
+      console.warn('視訊鏡頭開啟失敗:', err);
+      const trackingQuality = document.getElementById('tracking-quality');
+      if (trackingQuality) trackingQuality.textContent = '無內建鏡頭';
+    }
+  });
+
+  btnScreen?.addEventListener('click', async () => {
+    btnScreen.classList.add('active');
+    btnPhone?.classList.remove('active');
+    btnWebcam?.classList.remove('active');
+    phonePanel?.classList.add('hidden');
+    await tracker.startScreenShare();
+  });
+
+  // Reconnect / New Room / Apply Host Buttons
+  document.getElementById('btn-reconnect-phone')?.addEventListener('click', async () => {
+    await startPhoneConnection(true);
+  });
+
+  document.getElementById('btn-new-room')?.addEventListener('click', async () => {
+    await startPhoneConnection(false);
+  });
+
+  document.getElementById('btn-apply-host')?.addEventListener('click', async () => {
+    await startPhoneConnection(true);
+  });
+
+  // Start with Phone Camera mode by default
+  await startPhoneConnection(true);
 
   // Model Preset Selection & Custom VRM Upload
   const modelPresetSelect = document.getElementById('model-preset');

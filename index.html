@@ -70,24 +70,47 @@
     <aside class="sidebar-panel glass-panel">
       <!-- Input Video & Tracking Feedback Section -->
       <section class="panel-section">
-        <h3 class="section-title">📱 手機鏡頭畫面連線</h3>
+        <h3 class="section-title">📹 姿態追蹤畫面來源</h3>
         
+        <!-- Video Source Selector -->
+        <div class="source-selector">
+          <button id="src-phone" class="source-btn active">📱 手機鏡頭</button>
+          <button id="src-webcam" class="source-btn">📷 電腦鏡頭</button>
+          <button id="src-screen" class="source-btn">🖥️ 螢幕畫面</button>
+        </div>
+
         <!-- WebRTC Phone Connection Panel -->
         <div id="phone-panel" class="phone-panel">
           <div class="phone-panel-header">
             <span class="phone-status-dot" id="phone-status-dot"></span>
             <span id="phone-status-text">等待手機連線...</span>
+            <button id="btn-reconnect-phone" class="mini-btn" title="重新建立串流">🔄 重試</button>
           </div>
+
           <div class="phone-panel-body">
             <div class="room-id-display">
               <span class="room-id-label">房間 ID</span>
               <span class="room-id-value" id="room-id-display">------</span>
+              <button id="btn-new-room" class="text-link-btn">產生新 ID</button>
             </div>
             <div id="phone-qr-container" class="phone-qr-container">
               <canvas id="phone-qr-canvas" width="120" height="120"></canvas>
               <div class="qr-caption">手機掃描開啟鏡頭頁面</div>
             </div>
             <div class="phone-panel-url" id="phone-url-text"></div>
+          </div>
+
+          <!-- Local IP / Custom Host Input for Local WiFi testing -->
+          <div class="host-config">
+            <label for="custom-host-input" class="form-label">手機掃描 IP 設定 (若掃描 localhost 無法開啟)：</label>
+            <div class="input-with-btn">
+              <input type="text" id="custom-host-input" class="custom-input" placeholder="例如: 192.168.1.100:3000" />
+              <button id="btn-apply-host" class="mini-btn primary">更新 QR</button>
+            </div>
+          </div>
+
+          <div class="phone-tip">
+            💡 <strong>連線提示：</strong>請確認手機與電腦連接相同 Wi-Fi。若手機顯示無法存取鏡頭，請在上方輸入電腦局域網 IP。
           </div>
         </div>
 
