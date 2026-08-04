@@ -14,7 +14,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     videoInput,
     canvasOutput,
     (results, isBound) => {
-      avatar.updateMotion(results, isBound);
+      // Pass videoInput so Kalidokit can read the correct aspect ratio
+      avatar.updateMotion(results, isBound, videoInput);
     }
   );
 
