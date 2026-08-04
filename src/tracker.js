@@ -51,17 +51,23 @@ export class MotionTracker {
   async startCamera() {
     this._stopCurrentSource();
 
-    const CameraClass = window.Camera || Camera;
+    try {
+      const CameraClass = window.Camera || Camera;
 
-    this.camera = new CameraClass(this.video, {
-      onFrame: async () => {
-        await this.holistic.send({ image: this.video });
-      },
-      width: 640,
-      height: 480
-    });
+      this.camera = new CameraClass(this.video, {
+        onFrame: async () => {
+          await this.holistic.send({ image: this.video });
+        },
+        width: 640,
+        height: 480
+      });
 
-    await this.camera.start();
+      await this.camera.start();
+    } catch (err) {
+      console.warn('MediaPipe Camera 啟動失敗 (可能無鏡頭):', err);
+      this.camera = null;
+      throw err;
+    }
   }
 
   async startScreenShare() {

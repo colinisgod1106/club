@@ -21,9 +21,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   );
 
-  // Start Webcam Tracking by default
-  await tracker.startCamera();
-
   // --- UI Event Handlers ---
 
   // Camera Reset
@@ -41,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     tracker.toggleBindStatus();
   });
 
-  // Source Selector: Webcam vs Screen Share
+  // Source Selector: Webcam vs Screen Share vs Phone
   const btnWebcam = document.getElementById('src-webcam');
   const btnScreen = document.getElementById('src-screen');
   const btnPhone  = document.getElementById('src-phone');
@@ -52,7 +49,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnPhone.classList.remove('active');
     document.getElementById('phone-panel').classList.add('hidden');
     tracker.stopPhoneStream();
-    await tracker.startCamera();
+    try {
+      await tracker.startCamera();
+    } catch (err) {
+      console.warn('視訊鏡頭開啟失敗:', err);
+      const trackingQuality = document.getElementById('tracking-quality');
+      if (trackingQuality) trackingQuality.textContent = '無內建鏡頭';
+    }
   });
 
   btnScreen.addEventListener('click', async () => {
@@ -86,6 +89,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       updatePhoneStatusUI(state);
     });
   });
+
+  // Try starting webcam by default (catch error gracefully if PC has no webcam)
+  try {
+    await tracker.startCamera();
+  } catch (err) {
+    console.warn('電腦未偵測到鏡頭，請切換至「📱 手機鏡頭」或「🖥️ 螢幕畫面」:', err);
+    const trackingQuality = document.getElementById('tracking-quality');
+    if (trackingQuality) {
+      trackingQuality.textContent = '無鏡頭 (請選手機/螢幕)';
+      trackingQuality.className = 'hud-pill quality-warn';
+    }
+  }
 
   // Model Preset Selection & Custom VRM Upload
   const modelPresetSelect = document.getElementById('model-preset');
