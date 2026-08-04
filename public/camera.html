@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>📱 手機鏡頭串流 — Anime VRM Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cyan: #00f0ff;
+      --pink: #ff2a8d;
+      --purple: #9d4edd;
+      --gold: #ffb703;
+      --bg-dark: #0a0c14;
+      --bg-panel: rgba(255,255,255,0.05);
+      --border: rgba(0,240,255,0.2);
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: #e0e8ff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(157,78,221,0.15) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 100%, rgba(0,240,255,0.1) 0%, transparent 60%);
+    }
+
+    header {
+      width: 100%;
+      padding: 20px 16px 12px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0,0,0,0.3);
+      backdrop-filter: blur(12px);
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--cyan);
+      text-shadow: 0 0 12px rgba(0,240,255,0.5);
+    }
+
+    header p {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.5);
+      margin-top: 4px;
+    }
+
+    .main-content {
+      flex: 1;
+      width: 100%;
+      max-width: 480px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Status Card */
+    .status-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #444;
+      flex-shrink: 0;
+      transition: all 0.3s;
+    }
+
+    .status-dot.waiting  { background: var(--gold); box-shadow: 0 0 8px var(--gold); animation: pulse 1.5s infinite; }
+    .status-dot.connecting { background: var(--purple); box-shadow: 0 0 8px var(--purple); animation: pulse 0.8s infinite; }
+    .status-dot.connected { background: #00e676; box-shadow: 0 0 10px #00e676; animation: none; }
+    .status-dot.error { background: var(--pink); box-shadow: 0 0 8px var(--pink); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .status-text h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .status-text p {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.5);
+      margin-top: 2px;
+    }
+
+    /* Room ID card */
+    .room-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      backdrop-filter: blur(8px);
+    }
+
+    .room-card label {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .room-input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .room-input {
+      flex: 1;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--cyan);
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-align: center;
+      padding: 10px;
+      outline: none;
+      font-family: 'Courier New', monospace;
+    }
+
+    .room-input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 2px rgba(0,240,255,0.15);
+    }
+
+    /* Video Preview */
+    .video-wrapper {
+      position: relative;
+      background: #000;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      aspect-ratio: 9/16;
+      max-height: 35dvh;
+    }
+
+    #camera-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* mirror for selfie cam */
+    }
+
+    .video-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 8px;
+      background: rgba(10,12,20,0.7);
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+    }
+
+    .video-overlay.hidden { display: none; }
+
+    .video-overlay .cam-icon { font-size: 2.5rem; }
+
+    /* Action Buttons */
+    .btn {
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: 14px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.05em;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--cyan), #0088aa);
+      color: #000;
+      box-shadow: 0 0 24px rgba(0,240,255,0.3);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 32px rgba(0,240,255,0.5);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--pink), #aa0055);
+      color: #fff;
+      box-shadow: 0 0 24px rgba(255,42,141,0.3);
+    }
+
+    .btn-secondary {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      color: #e0e8ff;
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* Log */
+    .log-card {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.5);
+      max-height: 100px;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+
+    .log-entry { margin-bottom: 2px; }
+    .log-entry.info  { color: var(--cyan); }
+    .log-entry.ok    { color: #00e676; }
+    .log-entry.warn  { color: var(--gold); }
+    .log-entry.error { color: var(--pink); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📱 手機鏡頭串流</h1>
+  <p>Anime VRM Tracker — 手機作為追蹤鏡頭</p>
+</header>
+
+<div class="main-content">
+
+  <!-- Connection Status -->
+  <div class="status-card">
+    <div class="status-dot waiting" id="status-dot"></div>
+    <div class="status-text">
+      <h3 id="status-title">等待連線</h3>
+      <p id="status-desc">請在電腦端開啟主頁面，並確認房間 ID 一致</p>
+    </div>
+  </div>
+
+  <!-- Room ID -->
+  <div class="room-card">
+    <label>房間 ID（須與電腦端相同）</label>
+    <div class="room-input-row">
+      <input type="text" id="room-id-input" class="room-input" maxlength="6" placeholder="000000" autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+  </div>
+
+  <!-- Camera Preview -->
+  <div class="video-wrapper">
+    <video id="camera-video" playsinline muted autoplay></video>
+    <div class="video-overlay" id="video-overlay">
+      <span class="cam-icon">📷</span>
+      <span>點下方按鈕開啟鏡頭</span>
+    </div>
+  </div>
+
+  <!-- Buttons -->
+  <button class="btn btn-primary" id="btn-start">📡 開啟鏡頭並開始串流</button>
+  <button class="btn btn-danger" id="btn-stop" style="display:none">⛔ 停止串流</button>
+
+  <!-- Log -->
+  <div class="log-card" id="log-output">
+    <div class="log-entry info">系統就緒，等待操作...</div>
+  </div>
+
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────────────────────────
+const STUN_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' }
+];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let ws = null;
+let pc = null;
+let localStream = null;
+let roomId = null;
+
+// ─── UI Elements ──────────────────────────────────────────────────────────────
+const statusDot   = document.getElementById('status-dot');
+const statusTitle = document.getElementById('status-title');
+const statusDesc  = document.getElementById('status-desc');
+const videoEl     = document.getElementById('camera-video');
+const videoOverlay = document.getElementById('video-overlay');
+const roomInput   = document.getElementById('room-id-input');
+const btnStart    = document.getElementById('btn-start');
+const btnStop     = document.getElementById('btn-stop');
+const logOutput   = document.getElementById('log-output');
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function log(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `log-entry ${type}`;
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logOutput.appendChild(el);
+  logOutput.scrollTop = logOutput.scrollHeight;
+}
+
+function setStatus(state) {
+  const states = {
+    waiting:    { dot: 'waiting',    title: '等待連線',   desc: '輸入房間 ID 後點選開始串流' },
+    connecting: { dot: 'connecting', title: '連線中...',  desc: '正在與電腦端建立 WebRTC 連線' },
+    connected:  { dot: 'connected',  title: '✅ 串流中',  desc: '鏡頭已成功連線至電腦端' },
+    error:      { dot: 'error',      title: '❌ 連線失敗', desc: '請重新整理或檢查網路' },
+  };
+  const s = states[state] || states.waiting;
+  statusDot.className = `status-dot ${s.dot}`;
+  statusTitle.textContent = s.title;
+  statusDesc.textContent = s.desc;
+}
+
+// ─── Generate a default 6-digit Room ID from URL param or random ──────────────
+function generateRoomId() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('room') || Math.floor(100000 + Math.random() * 900000).toString();
+}
+roomInput.value = generateRoomId();
+
+// ─── WebSocket Connection ─────────────────────────────────────────────────────
+function connectSignaling(room) {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${location.host}/ws`;
+  log(`連線到 Signaling Server: ${wsUrl}`, 'info');
+
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    log('Signaling Server 已連線', 'ok');
+    ws.send(JSON.stringify({ type: 'join', roomId: room, role: 'phone' }));
+  };
+
+  ws.onmessage = async (event) => {
+    const msg = JSON.parse(event.data);
+    log(`收到訊號: ${msg.type}`, 'info');
+
+    if (msg.type === 'computer-ready') {
+      log('電腦端已就緒，發送 Offer...', 'ok');
+      await createAndSendOffer();
+    } else if (msg.type === 'answer') {
+      log('收到 Answer，設定遠端描述...', 'ok');
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      setStatus('connected');
+    } else if (msg.type === 'ice') {
+      if (msg.candidate) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+        } catch (e) {
+          log(`ICE 加入失敗: ${e.message}`, 'warn');
+        }
+      }
+    } else if (msg.type === 'peer-left') {
+      log('電腦端斷線', 'warn');
+      setStatus('waiting');
+    }
+  };
+
+  ws.onerror = (e) => {
+    log(`WebSocket 錯誤: ${e.message || '未知'}`, 'error');
+    setStatus('error');
+  };
+
+  ws.onclose = () => {
+    log('Signaling Server 連線關閉', 'warn');
+  };
+}
+
+// ─── WebRTC Setup ─────────────────────────────────────────────────────────────
+function setupPeerConnection() {
+  pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+
+  // Add all local tracks to the peer connection
+  localStream.getTracks().forEach(track => {
+    pc.addTrack(track, localStream);
+  });
+
+  pc.onicecandidate = ({ candidate }) => {
+    if (candidate && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ice', roomId, candidate }));
+    }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    log(`ICE 狀態: ${pc.iceConnectionState}`, 'info');
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      setStatus('connected');
+      log('🎉 WebRTC P2P 連線建立成功！', 'ok');
+    } else if (pc.iceConnectionState === 'failed') {
+      log('ICE 協商失敗', 'error');
+      setStatus('error');
+    }
+  };
+}
+
+async function createAndSendOffer() {
+  setupPeerConnection();
+  const offer = await pc.createOffer({ offerToReceiveVideo: false, offerToReceiveAudio: false });
+  await pc.setLocalDescription(offer);
+  ws.send(JSON.stringify({ type: 'offer', roomId, sdp: pc.localDescription }));
+  log('Offer 已發送', 'ok');
+}
+
+// ─── Main: Start Streaming ────────────────────────────────────────────────────
+btnStart.addEventListener('click', async () => {
+  roomId = roomInput.value.trim() || generateRoomId();
+  roomInput.value = roomId;
+
+  btnStart.disabled = true;
+  setStatus('connecting');
+
+  try {
+    // Request camera (prefer rear camera on mobile)
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' }, // rear cam
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30 }
+      },
+      audio: false
+    });
+
+    videoEl.srcObject = localStream;
+    videoOverlay.classList.add('hidden');
+    log('鏡頭已開啟', 'ok');
+
+    connectSignaling(roomId);
+
+    btnStart.style.display = 'none';
+    btnStop.style.display = 'block';
+  } catch (err) {
+    log(`鏡頭開啟失敗: ${err.message}`, 'error');
+    setStatus('error');
+    btnStart.disabled = false;
+  }
+});
+
+// ─── Stop Streaming ───────────────────────────────────────────────────────────
+btnStop.addEventListener('click', () => {
+  if (pc) { pc.close(); pc = null; }
+  if (ws) { ws.send(JSON.stringify({ type: 'leave', roomId })); ws.close(); ws = null; }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+
+  videoEl.srcObject = null;
+  videoOverlay.classList.remove('hidden');
+
+  btnStop.style.display = 'none';
+  btnStart.style.display = 'block';
+  btnStart.disabled = false;
+
+  setStatus('waiting');
+  log('串流已停止', 'warn');
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Railway Deployment Configuration
+# Docs: https://docs.railway.app/reference/config-as-code
+
+[build]
+  builder = "NIXPACKS"
+  buildCommand = "npm install && npm run build"
+
+[deploy]
+  startCommand = "node server.js"
+  restartPolicyType = "ON_FAILURE"
+  restartPolicyMaxRetries = 3
+  healthcheckPath = "/health"
+  healthcheckTimeout = 300

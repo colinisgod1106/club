@@ -1,0 +1,16 @@
+# Render.com Deployment Configuration
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: anime-vrm-tracker
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: node server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: false
+    autoDeploy: true

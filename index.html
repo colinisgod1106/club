@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星穹姿態投影 // Anime Motion Tracker & Gesture Sync</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- MediaPipe CDN Script Loaders for Instant Reliability -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+  <!-- Kalidokit as UMD (exposes window.Kalidokit) -->
+  <script src="https://cdn.jsdelivr.net/npm/kalidokit@1.1.5/dist/kalidokit.umd.js" crossorigin="anonymous"></script>
+
+  <!-- ES Modules Import Map for Three.js & VRM -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.1.2/lib/three-vrm.module.js"
+    }
+  }
+  </script>
+
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Cyberpunk / Anime Header -->
+    <header class="app-header">
+      <div class="logo-container">
+        <div class="logo-icon">✨</div>
+        <div class="logo-text">
+          <h1>ANIME MOTION SYNC <span>3D</span></h1>
+          <p class="subtitle">星穹二次元動作投影與手勢控制系統</p>
+        </div>
+      </div>
+
+      <!-- Sync Status Badge -->
+      <div class="status-container">
+        <div id="sync-status" class="status-badge unbound">
+          <span class="status-dot"></span>
+          <span id="status-text">UNBOUND // 待機中</span>
+        </div>
+        <div id="gesture-detected" class="gesture-badge">
+          <span class="gesture-icon">🖐️</span>
+          <span id="gesture-name">無手勢</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Viewport (3D VRM Canvas) -->
+    <main class="viewport-container">
+      <canvas id="vrm-canvas"></canvas>
+
+      <!-- 3D Scene Controls Overlay -->
+      <div class="viewport-overlay-controls">
+        <button id="btn-reset-cam" class="glass-btn" title="重置鏡頭">
+          <span>🎥 重置視角</span>
+        </button>
+        <button id="btn-toggle-grid" class="glass-btn" title="開關背景格線">
+          <span>🌐 切換格線</span>
+        </button>
+        <button id="btn-toggle-bind" class="glass-btn primary-pulse" title="手動切換綁定">
+          <span id="bind-btn-label">⚡ 綁定姿態跟隨</span>
+        </button>
+      </div>
+
+      <!-- Instruction / Gesture Guide Panel -->
+      <div class="gesture-guide-card glass-panel">
+        <div class="card-title">🖐️ 手勢指令說明</div>
+        <div class="guide-item">
+          <span class="guide-gesture">✌️ 剪刀手 (Victory)</span>
+          <span class="guide-desc">綁定 / 解除動作跟隨</span>
+        </div>
+        <div class="guide-item">
+          <span class="guide-gesture">✊ 握拳 (Fist)</span>
+          <span class="guide-desc">強制鎖定關節</span>
+        </div>
+        <div class="guide-item">
+          <span class="guide-gesture">✋ 開掌 (Open Palm)</span>
+          <span class="guide-desc">重置預設站姿</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right Control & Camera Tracking Sidebar -->
+    <aside class="sidebar-panel glass-panel">
+      <!-- Input Video & Tracking Feedback Section -->
+      <section class="panel-section">
+        <h3 class="section-title">📹 姿態追蹤畫面鎖定</h3>
+        
+        <!-- Video Source Toggle -->
+        <div class="source-selector">
+          <button id="src-webcam" class="source-btn active">📷 視訊鏡頭</button>
+          <button id="src-screen" class="source-btn">🖥️ 螢幕/視窗畫面</button>
+          <button id="src-phone" class="source-btn">📱 手機鏡頭</button>
+        </div>
+
+        <!-- WebRTC Phone Connection Panel (hidden by default) -->
+        <div id="phone-panel" class="phone-panel hidden">
+          <div class="phone-panel-header">
+            <span class="phone-status-dot" id="phone-status-dot"></span>
+            <span id="phone-status-text">等待手機連線...</span>
+          </div>
+          <div class="phone-panel-body">
+            <div class="room-id-display">
+              <span class="room-id-label">房間 ID</span>
+              <span class="room-id-value" id="room-id-display">------</span>
+            </div>
+            <div id="phone-qr-container" class="phone-qr-container">
+              <canvas id="phone-qr-canvas" width="120" height="120"></canvas>
+              <div class="qr-caption">手機掃描開啟鏡頭頁面</div>
+            </div>
+            <div class="phone-panel-url" id="phone-url-text"></div>
+          </div>
+        </div>
+
+        <div class="video-preview-wrapper">
+          <video id="input-video" playsinline muted autoplay></video>
+          <canvas id="output-canvas"></canvas>
+
+          <!-- Tracking Overlay Indicators -->
+          <div class="video-hud">
+            <span id="fps-counter" class="hud-pill">FPS: --</span>
+            <span id="tracking-quality" class="hud-pill quality-good">追蹤中</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- VRM Model Management Section -->
+      <section class="panel-section">
+        <h3 class="section-title">🎭 3D 二次元角色模型</h3>
+        
+        <div class="model-select-wrapper">
+          <label for="model-preset" class="form-label">選擇預設角色：</label>
+          <select id="model-preset" class="custom-select">
+            <option value="/models/model1.vrm">模型 1 — 大型角色 (40MB)</option>
+            <option value="/models/model2.vrm">模型 2 — 輕量角色 (9MB)</option>
+            <option value="custom">自訂 VRM 模型檔案 (.vrm)...</option>
+          </select>
+        </div>
+
+        <div id="vrm-upload-box" class="upload-box hidden">
+          <input type="file" id="vrm-file-input" accept=".vrm,.glb" class="file-input" />
+          <label for="vrm-file-input" class="upload-label">
+            <span>📁 點擊或拖曳 .vrm 檔案至此</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Tracking Settings & Fine-Tuning Section -->
+      <section class="panel-section">
+        <h3 class="section-title">⚙️ 追蹤與靈敏度微調</h3>
+        
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>平滑化 (Smoothing)</span>
+            <span id="val-smoothing">0.8</span>
+          </div>
+          <input type="range" id="slider-smoothing" min="0.1" max="0.95" step="0.05" value="0.8">
+        </div>
+
+        <div class="slider-group">
+          <div class="slider-label">
+            <span>手勢判定時間 (秒)</span>
+            <span id="val-gesture-hold">0.5s</span>
+          </div>
+          <input type="range" id="slider-gesture-hold" min="0.2" max="1.5" step="0.1" value="0.5">
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
