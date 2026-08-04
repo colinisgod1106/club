@@ -159,18 +159,6 @@ body {
   background-color: currentColor;
 }
 
-.gesture-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  background: rgba(157, 78, 221, 0.15);
-  border: 1px solid var(--accent-purple);
-  border-radius: 30px;
-  font-size: 0.85rem;
-  color: var(--text-primary);
-}
-
 /* Main Viewport (Canvas) */
 .viewport-container {
   grid-area: main;
@@ -221,45 +209,6 @@ body {
 .glass-btn.primary-pulse {
   background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(255, 42, 141, 0.2));
   border-color: var(--accent-cyan);
-}
-
-/* Gesture Guide Card */
-.gesture-guide-card {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  padding: 14px 18px;
-  max-width: 300px;
-  z-index: 10;
-}
-
-.card-title {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--accent-cyan);
-  margin-bottom: 10px;
-  letter-spacing: 0.5px;
-}
-
-.guide-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 0.78rem;
-}
-
-.guide-item:last-child {
-  margin-bottom: 0;
-}
-
-.guide-gesture {
-  font-weight: 700;
-  color: var(--accent-gold);
-}
-
-.guide-desc {
-  color: var(--text-secondary);
 }
 
 /* Sidebar */

@@ -9,15 +9,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initialize 3D VRM Avatar Engine
   const avatar = new VRMAvatar(canvas3D);
 
-  // Initialize MediaPipe & Gesture Tracking Engine
+  // Initialize MediaPipe Tracking Engine
   const tracker = new MotionTracker(
     videoInput,
     canvasOutput,
     (results, isBound) => {
       avatar.updateMotion(results, isBound);
-    },
-    (detectedGesture) => {
-      updateGestureUI(detectedGesture);
     }
   );
 
@@ -135,7 +132,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Sliders: Smoothing & Gesture Hold Threshold
+  // Sliders: Smoothing
   const sliderSmoothing = document.getElementById('slider-smoothing');
   const valSmoothing = document.getElementById('val-smoothing');
   sliderSmoothing.addEventListener('input', (e) => {
@@ -143,45 +140,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     avatar.smoothingFactor = val;
     valSmoothing.textContent = val.toFixed(2);
   });
-
-  const sliderGestureHold = document.getElementById('slider-gesture-hold');
-  const valGestureHold = document.getElementById('val-gesture-hold');
-  sliderGestureHold.addEventListener('input', (e) => {
-    const val = parseFloat(e.target.value);
-    tracker.gestureHoldDurationThreshold = val * 1000;
-    valGestureHold.textContent = `${val.toFixed(1)}s`;
-  });
 });
-
-// Update Gesture HUD UI Badge
-function updateGestureUI(gesture) {
-  const gestureBadge = document.getElementById('gesture-detected');
-  const gestureName = document.getElementById('gesture-name');
-  const gestureIcon = gestureBadge.querySelector('.gesture-icon');
-
-  switch (gesture) {
-    case 'VICTORY':
-      gestureIcon.textContent = '✌️';
-      gestureName.textContent = '剪刀手 (Binding Toggle)';
-      gestureBadge.style.borderColor = '#00f0ff';
-      break;
-    case 'OPEN_PALM':
-      gestureIcon.textContent = '✋';
-      gestureName.textContent = '開掌 (Reset Pose)';
-      gestureBadge.style.borderColor = '#ffb703';
-      break;
-    case 'FIST':
-      gestureIcon.textContent = '✊';
-      gestureName.textContent = '握拳 (Lock Pose)';
-      gestureBadge.style.borderColor = '#ff2a8d';
-      break;
-    default:
-      gestureIcon.textContent = '🖐️';
-      gestureName.textContent = '無手勢';
-      gestureBadge.style.borderColor = '#9d4edd';
-      break;
-  }
-}
 
 // Update Phone Stream Connection Status UI
 function updatePhoneStatusUI(state) {

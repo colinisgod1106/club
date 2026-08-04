@@ -4,17 +4,13 @@ const STUN_SERVERS = [
 ];
 
 export class MotionTracker {
-  constructor(videoElement, canvasElement, onResultsCallback, onGestureCallback) {
+  constructor(videoElement, canvasElement, onResultsCallback) {
     this.video = videoElement;
     this.canvas = canvasElement;
     this.ctx = canvasElement.getContext('2d');
     this.onResults = onResultsCallback;
-    this.onGesture = onGestureCallback;
 
     this.isBound = false;
-    this.lastGesture = 'NONE';
-    this.gestureHoldStartTime = 0;
-    this.gestureHoldDurationThreshold = 500; // ms required to hold gesture before trigger
 
     this.fpsCount = 0;
     this.lastFpsUpdate = performance.now();
@@ -221,7 +217,6 @@ export class MotionTracker {
   _handleResults(results) {
     this._updateFps();
     this._drawLandmarks(results);
-    this._analyzeGestures(results);
 
     if (this.onResults) {
       this.onResults(results, this.isBound);
@@ -279,72 +274,6 @@ export class MotionTracker {
     });
 
     this.ctx.restore();
-  }
-
-  _analyzeGestures(results) {
-    const hand = results.rightHandLandmarks || results.leftHandLandmarks;
-    if (!hand) {
-      this.lastGesture = 'NONE';
-      this.gestureHoldStartTime = 0;
-      return;
-    }
-
-    const detected = this._detectHandGesture(hand);
-
-    if (detected !== 'NONE' && detected === this.lastGesture) {
-      const heldTime = performance.now() - this.gestureHoldStartTime;
-      if (heldTime >= this.gestureHoldDurationThreshold) {
-        this._triggerGestureAction(detected);
-        this.gestureHoldStartTime = performance.now() + 1000; // Cooldown to avoid rapid repeated triggers
-      }
-    } else {
-      this.lastGesture = detected;
-      this.gestureHoldStartTime = performance.now();
-    }
-
-    if (this.onGesture) {
-      this.onGesture(detected);
-    }
-  }
-
-  _detectHandGesture(lm) {
-    // lm array of 21 points:
-    // 4: thumb tip, 8: index tip, 12: middle tip, 16: ring tip, 20: pinky tip
-    // 3: thumb ip, 6: index pip, 10: middle pip, 14: ring pip, 18: pinky pip
-    const isIndexExtended = lm[8].y < lm[6].y;
-    const isMiddleExtended = lm[12].y < lm[10].y;
-    const isRingExtended = lm[16].y < lm[14].y;
-    const isPinkyExtended = lm[20].y < lm[18].y;
-
-    // Victory Gesture (✌️): Index & Middle extended, Ring & Pinky folded
-    if (isIndexExtended && isMiddleExtended && !isRingExtended && !isPinkyExtended) {
-      return 'VICTORY';
-    }
-
-    // Open Palm (✋): All 4 main fingers extended
-    if (isIndexExtended && isMiddleExtended && isRingExtended && isPinkyExtended) {
-      return 'OPEN_PALM';
-    }
-
-    // Closed Fist (✊): All 4 main fingers folded
-    if (!isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended) {
-      return 'FIST';
-    }
-
-    return 'NONE';
-  }
-
-  _triggerGestureAction(gesture) {
-    if (gesture === 'VICTORY') {
-      // Toggle Bound / Unbound status!
-      this.isBound = !this.isBound;
-      console.log(`[Gesture Trigger] Victory detected! Toggled status to: ${this.isBound ? 'BOUND' : 'UNBOUND'}`);
-      this._updateStatusUI();
-    } else if (gesture === 'OPEN_PALM') {
-      // Reset to Unbound Standby
-      this.isBound = false;
-      this._updateStatusUI();
-    }
   }
 
   toggleBindStatus() {
