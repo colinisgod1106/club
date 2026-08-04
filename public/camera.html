@@ -287,7 +287,8 @@
 
   <!-- Buttons -->
   <button class="btn btn-primary" id="btn-start">📡 開啟鏡頭並開始串流</button>
-  <button class="btn btn-danger" id="btn-stop" style="display:none">⛔ 停止串流</button>
+  <button class="btn btn-secondary" id="btn-flip" style="margin-top: 8px; display: none;">🔄 切換前後鏡頭 (目前：前置自拍)</button>
+  <button class="btn btn-danger" id="btn-stop" style="margin-top: 8px; display: none;">⛔ 停止串流</button>
 
   <!-- Log -->
   <div class="log-card" id="log-output">
@@ -308,6 +309,7 @@ let ws = null;
 let pc = null;
 let localStream = null;
 let roomId = null;
+let currentFacingMode = 'user'; // default: selfie camera
 
 // ─── UI Elements ──────────────────────────────────────────────────────────────
 const statusDot   = document.getElementById('status-dot');
@@ -317,6 +319,7 @@ const videoEl     = document.getElementById('camera-video');
 const videoOverlay = document.getElementById('video-overlay');
 const roomInput   = document.getElementById('room-id-input');
 const btnStart    = document.getElementById('btn-start');
+const btnFlip     = document.getElementById('btn-flip');
 const btnStop     = document.getElementById('btn-stop');
 const logOutput   = document.getElementById('log-output');
 
@@ -432,6 +435,28 @@ async function createAndSendOffer() {
   log('Offer 已發送', 'ok');
 }
 
+// ─── Camera Media Capture Helper ──────────────────────────────────────────────
+async function openCameraStream(facing) {
+  if (localStream) {
+    localStream.getTracks().forEach(t => t.stop());
+  }
+
+  localStream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: { ideal: facing }, // 'user' for front selfie, 'environment' for rear
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      frameRate: { ideal: 30 }
+    },
+    audio: false
+  });
+
+  videoEl.srcObject = localStream;
+  videoEl.style.transform = facing === 'user' ? 'scaleX(-1)' : 'none'; // mirror selfie cam
+  videoOverlay.classList.add('hidden');
+  log(`鏡頭已開啟 (模式: ${facing === 'user' ? '前置自拍' : '後置鏡頭'})`, 'ok');
+}
+
 // ─── Main: Start Streaming ────────────────────────────────────────────────────
 btnStart.addEventListener('click', async () => {
   roomId = roomInput.value.trim() || generateRoomId();
@@ -441,29 +466,40 @@ btnStart.addEventListener('click', async () => {
   setStatus('connecting');
 
   try {
-    // Request camera (prefer rear camera on mobile)
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' }, // rear cam
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30 }
-      },
-      audio: false
-    });
-
-    videoEl.srcObject = localStream;
-    videoOverlay.classList.add('hidden');
-    log('鏡頭已開啟', 'ok');
+    // Request front selfie camera by default
+    await openCameraStream(currentFacingMode);
 
     connectSignaling(roomId);
 
     btnStart.style.display = 'none';
+    btnFlip.style.display = 'block';
     btnStop.style.display = 'block';
   } catch (err) {
     log(`鏡頭開啟失敗: ${err.message}`, 'error');
     setStatus('error');
     btnStart.disabled = false;
+  }
+});
+
+// ─── Flip Camera ──────────────────────────────────────────────────────────────
+btnFlip.addEventListener('click', async () => {
+  currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+  btnFlip.textContent = `🔄 切換前後鏡頭 (目前：${currentFacingMode === 'user' ? '前置自拍' : '後置鏡頭'})`;
+  
+  try {
+    await openCameraStream(currentFacingMode);
+
+    // Replace video track in ongoing WebRTC PeerConnection if active
+    if (pc) {
+      const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+      const newTrack = localStream.getVideoTracks()[0];
+      if (sender && newTrack) {
+        await sender.replaceTrack(newTrack);
+        log('WebRTC 視頻軌道已更新為新鏡頭', 'ok');
+      }
+    }
+  } catch (err) {
+    log(`切換鏡頭失敗: ${err.message}`, 'error');
   }
 });
 
@@ -476,6 +512,7 @@ btnStop.addEventListener('click', () => {
   videoEl.srcObject = null;
   videoOverlay.classList.remove('hidden');
 
+  btnFlip.style.display = 'none';
   btnStop.style.display = 'none';
   btnStart.style.display = 'block';
   btnStart.disabled = false;
