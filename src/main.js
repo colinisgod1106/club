@@ -115,8 +115,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     await startPhoneConnection(true);
   });
 
-  // Start with Phone Camera mode by default
-  await startPhoneConnection(true);
+  // --- Auto-detect Camera & Initial Source ---
+  async function initInitialSource() {
+    try {
+      // Check if mediaDevices API is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        throw new Error('MediaDevices API not supported');
+      }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const hasWebcam = devices.some(device => device.kind === 'videoinput');
+
+      if (hasWebcam) {
+        console.log('[Init] Webcam detected, attempting to start...');
+        // Set UI to webcam mode
+        btnWebcam?.classList.add('active');
+        btnPhone?.classList.remove('active');
+        btnScreen?.classList.remove('active');
+        phonePanel?.classList.add('hidden');
+
+        try {
+          await tracker.startCamera();
+          console.log('[Init] Webcam started successfully');
+          return;
+        } catch (err) {
+          console.warn('[Init] Webcam start failed, falling back to phone:', err);
+        }
+      } else {
+        console.log('[Init] No webcam detected, using phone mode');
+      }
+    } catch (err) {
+      console.warn('[Init] Camera detection failed:', err);
+    }
+
+    // Fallback to Phone Camera mode
+    btnPhone?.classList.add('active');
+    btnWebcam?.classList.remove('active');
+    btnScreen?.classList.remove('active');
+    phonePanel?.classList.remove('hidden');
+    await startPhoneConnection(true);
+  }
+
+  await initInitialSource();
 
   // Model Preset Selection & Custom VRM Upload
   const modelPresetSelect = document.getElementById('model-preset');
