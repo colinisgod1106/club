@@ -6,6 +6,7 @@ import {
   DirectPoseRetargeter,
   calibratedBodyDelta,
   solveLocalAimQuaternion,
+  stabilizeDirection,
 } from '../src/directPoseRetargeter.js';
 
 const EPSILON = 1e-6;
@@ -61,6 +62,20 @@ test('calibration keeps yaw one-to-one while softening torso lean', () => {
   assert.ok(Math.abs(THREE.MathUtils.radToDeg(correctedEuler.y) - 45) < 0.01);
   assert.ok(THREE.MathUtils.radToDeg(correctedEuler.x) < 12);
   assert.ok(THREE.MathUtils.radToDeg(correctedEuler.x) > 9);
+});
+
+test('direction stabilizer rejects sub-degree depth jitter', () => {
+  const stable = new THREE.Vector3(1, 0, 0);
+  const noisy = new THREE.Vector3(1, 0.004, -0.006).normalize();
+  const result = stabilizeDirection(stable, noisy, 1.5, 18);
+  assert.ok(result.distanceTo(stable) < EPSILON);
+});
+
+test('direction stabilizer caps one-frame tracking spikes', () => {
+  const stable = new THREE.Vector3(1, 0, 0);
+  const spike = new THREE.Vector3(0, 1, 0);
+  const result = stabilizeDirection(stable, spike, 1.5, 18);
+  assert.ok(Math.abs(THREE.MathUtils.radToDeg(stable.angleTo(result)) - 18) < 0.01);
 });
 
 function makeNode(parent, position) {
@@ -141,4 +156,20 @@ test('full chain retargeter aims arms and legs at detected child joints', () => 
     ).normalize();
     assert.ok(actual.distanceTo(desired) < EPSILON, `${boneName} did not reach its detected direction`);
   }
+});
+
+test('calibrated torso motion is distributed through hips, spine and chest', () => {
+  const vrm = fakeVrm();
+  const retargeter = new DirectPoseRetargeter(vrm);
+  const neutral = syntheticPose();
+  for (let frame = 0; frame < 12; frame++) retargeter.update(neutral, 1);
+
+  const leaning = syntheticPose();
+  leaning[11].z = -0.25;
+  leaning[12].z = -0.25;
+  retargeter.update(leaning, 1);
+
+  assert.ok(vrm.bones[B.Hips].quaternion.angleTo(new THREE.Quaternion()) > 0.005);
+  assert.ok(vrm.bones[B.Spine].quaternion.angleTo(new THREE.Quaternion()) > 0.005);
+  assert.ok(vrm.bones[B.Chest].quaternion.angleTo(new THREE.Quaternion()) > 0.005);
 });
