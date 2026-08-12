@@ -32,13 +32,13 @@ export class MotionTracker {
     });
 
     this.holistic.setOptions({
-      modelComplexity: 1,
+      modelComplexity: 2,
       smoothLandmarks: true,
       enableSegmentation: false,
       smoothSegmentation: false,
       refineFaceLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
+      minDetectionConfidence: 0.65,
+      minTrackingConfidence: 0.65
     });
 
     this.holistic.onResults((results) => this._handleResults(results));
@@ -54,8 +54,8 @@ export class MotionTracker {
         onFrame: async () => {
           await this.holistic.send({ image: this.video });
         },
-        width: 640,
-        height: 480
+        width: 960,
+        height: 720
       });
 
       await this.camera.start();

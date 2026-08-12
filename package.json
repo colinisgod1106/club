@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite --force",
     "build": "vite build",
+    "test": "node --test",
     "start": "node server.js",
     "preview": "vite preview"
   },
