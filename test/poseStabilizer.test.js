@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LandmarkStabilizer,
-  TorsoOrientationTracker,
   handTrackingQuality,
   hasReliableTorso,
 } from '../src/poseStabilizer.js';
@@ -18,19 +17,9 @@ function torso(yaw, visibility = 1) {
   return points;
 }
 
-test('torso yaw stays continuous while crossing 180 degrees', () => {
-  const tracker = new TorsoOrientationTracker({ alpha: 1, maxStep: Math.PI });
-  const before = tracker.update(torso(Math.PI - 0.05));
-  const after = tracker.update(torso(-Math.PI + 0.05));
-  assert.ok(Math.abs(after - before) < 0.11);
-  assert.ok(after > Math.PI);
-});
-
-test('unreliable torso does not replace the last orientation', () => {
-  const tracker = new TorsoOrientationTracker({ alpha: 1, maxStep: Math.PI });
-  const stable = tracker.update(torso(0.4));
-  assert.equal(tracker.update(torso(2.5, 0.1)), stable);
+test('torso reliability rejects occluded anchor joints', () => {
   assert.equal(hasReliableTorso(torso(0, 0.1)), false);
+  assert.equal(hasReliableTorso(torso(0, 1)), true);
 });
 
 test('landmark filter holds a low-confidence outlier', () => {

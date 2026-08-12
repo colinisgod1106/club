@@ -9,7 +9,7 @@ function landmarkConfidence(landmark) {
 }
 
 export class LandmarkStabilizer {
-  constructor({ minConfidence = 0.45, minAlpha = 0.18, maxAlpha = 0.72 } = {}) {
+  constructor({ minConfidence = 0.45, minAlpha = 0.32, maxAlpha = 0.82 } = {}) {
     this.minConfidence = minConfidence;
     this.minAlpha = minAlpha;
     this.maxAlpha = maxAlpha;
@@ -46,40 +46,6 @@ export class LandmarkStabilizer {
     });
     this.previous = filtered.map((point) => point && ({ ...point }));
     return filtered;
-  }
-}
-
-export class TorsoOrientationTracker {
-  constructor({ alpha = 0.28, maxStep = Math.PI / 10, minConfidence = 0.55 } = {}) {
-    this.alpha = alpha;
-    this.maxStep = maxStep;
-    this.minConfidence = minConfidence;
-    this.yaw = null;
-  }
-
-  reset() {
-    this.yaw = null;
-  }
-
-  update(worldLandmarks) {
-    if (!hasReliableTorso(worldLandmarks, this.minConfidence)) return this.yaw;
-    const ls = worldLandmarks[11];
-    const rs = worldLandmarks[12];
-    const lh = worldLandmarks[23];
-    const rh = worldLandmarks[24];
-    const dx = ((rs.x - ls.x) * 0.7) + ((rh.x - lh.x) * 0.3);
-    const dz = (((rs.z ?? 0) - (ls.z ?? 0)) * 0.7)
-      + (((rh.z ?? 0) - (lh.z ?? 0)) * 0.3);
-    if (Math.hypot(dx, dz) < 0.08) return this.yaw;
-
-    const measured = Math.atan2(dz, -dx);
-    if (this.yaw === null) {
-      this.yaw = measured;
-      return this.yaw;
-    }
-    const delta = Math.atan2(Math.sin(measured - this.yaw), Math.cos(measured - this.yaw));
-    this.yaw += clamp(delta, -this.maxStep, this.maxStep) * this.alpha;
-    return this.yaw;
   }
 }
 

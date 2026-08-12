@@ -4,10 +4,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, VRMHumanBoneName } from '@pixiv/three-vrm';
 import {
   LandmarkStabilizer,
-  TorsoOrientationTracker,
   handTrackingQuality,
   hasReliableTorso,
 } from './poseStabilizer.js';
+import { DirectPoseRetargeter } from './directPoseRetargeter.js';
 
 export class VRMAvatar {
   constructor(canvasElement) {
@@ -17,19 +17,15 @@ export class VRMAvatar {
     this.clock = new THREE.Clock();
 
     // Smoothing / LERP configuration (0 = instant, 1 = no movement)
-    this.smoothingFactor = 0.7;
+    this.smoothingFactor = 0.55;
 
     // Camera defaults
     this._defaultCameraPos = new THREE.Vector3(0, 1.4, 2.5);
     this._defaultTargetPos = new THREE.Vector3(0, 1.2, 0);
 
-    this._pose2DFilter = new LandmarkStabilizer();
-    this._pose3DFilter = new LandmarkStabilizer({ minAlpha: 0.2, maxAlpha: 0.78 });
-    this._torsoOrientation = new TorsoOrientationTracker();
+    this._pose3DFilter = new LandmarkStabilizer({ minAlpha: 0.42, maxAlpha: 0.88 });
+    this._bodyRetargeter = null;
     this._lastHandSeen = { Left: 0, Right: 0 };
-
-    // Debug: print first rigged pose result
-    this._debugFrames = 0;
 
     this._initScene();
     this._initLights();
@@ -142,7 +138,9 @@ export class VRMAvatar {
         VRMUtils.rotateVRM0(vrm);
         vrm.scene.position.set(0, 0, 0);
 
+        this._bodyRetargeter = null;
         this._resetTrackingState();
+        this._bodyRetargeter = new DirectPoseRetargeter(vrm);
         this.controls.target.copy(this._defaultTargetPos);
         this.controls.update();
 
@@ -193,27 +191,15 @@ export class VRMAvatar {
 
     if (!rawPoseLandmarks || !hasReliableTorso(rawPoseLandmarks)) return;
 
-    const poseLandmarks = this._pose2DFilter.filter(rawPoseLandmarks);
     const pose3DLandmarks = this._pose3DFilter.filter(rawPose3DLandmarks);
 
+    // Body motion is solved directly from metric 3D joint directions. Kalidokit
+    // remains only for face/finger detail; its approximate body Euler solver is
+    // deliberately bypassed.
+    this._bodyRetargeter?.update(pose3DLandmarks, 1 - this.smoothingFactor * 0.65);
+
     const Kali = window.Kalidokit;
-    if (!Kali) { console.warn('[VRM] Kalidokit not loaded'); return; }
-
-    // ── Solve Pose ────────────────────────────────────────────────────────────
-    const riggedPose = Kali.Pose.solve(pose3DLandmarks, poseLandmarks, {
-      runtime: 'mediapipe',
-      video: videoEl || null,   // Pass video element for correct aspect ratio
-      enableLegs: true,
-    });
-
-    // ── Debug: log first result so we can see actual keys ─────────────────────
-    if (this._debugFrames < 3 && riggedPose) {
-      console.log('[Kalidokit] riggedPose sample:', JSON.stringify(riggedPose, null, 2));
-      this._debugFrames++;
-    }
-
-    const torsoYaw = this._torsoOrientation.update(pose3DLandmarks);
-    if (riggedPose) this._applyRiggedPose(riggedPose, torsoYaw);
+    if (!Kali) return;
 
     // ── Solve Face ────────────────────────────────────────────────────────────
     if (faceLandmarks) {
@@ -272,94 +258,6 @@ export class VRMAvatar {
     );
     const q = new THREE.Quaternion().setFromEuler(euler);
     node.quaternion.slerp(q, t);
-  }
-
-  /**
-   * Move a VRM bone's position (used for Hips translation → walking).
-   */
-  _rigPosition(boneName, pos, dampener = 1, lerpAmt = null) {
-    if (!pos) return;
-    const vrm = this.currentVrm;
-    if (!vrm || !vrm.humanoid) return;
-
-    const node = vrm.humanoid.getNormalizedBoneNode(boneName);
-    if (!node) return;
-
-    const t = lerpAmt !== null ? lerpAmt : (1 - this.smoothingFactor);
-
-    const v = new THREE.Vector3(
-      pos.x * dampener,
-      pos.y * dampener,
-      pos.z * dampener
-    );
-    node.position.lerp(v, t);
-  }
-
-  // ─── Pose Application ────────────────────────────────────────────────────────
-
-  _applyRiggedPose(riggedPose, torsoYaw = null) {
-    const vrm = this.currentVrm;
-    if (!vrm || !vrm.humanoid) return;
-
-    const L = 1 - this.smoothingFactor; // lerp weight per frame
-
-    // ── Hips ─────────────────────────────────────────────────────────────────
-    if (riggedPose.Hips) {
-      const hipsRot = riggedPose.Hips.rotation || riggedPose.Hips;
-      this._rigRotation(VRMHumanBoneName.Hips, {
-        x: hipsRot.x,
-        y: Number.isFinite(torsoYaw) ? torsoYaw : hipsRot.y,
-        z: hipsRot.z,
-      }, 1, L);
-
-      // Walking: shift the entire VRM scene based on Hips world position
-      if (riggedPose.Hips.worldPosition && vrm.scene) {
-        const hp = riggedPose.Hips.worldPosition;
-        vrm.scene.position.x = THREE.MathUtils.lerp(
-          vrm.scene.position.x, -hp.x * 0.5, L * 0.4
-        );
-        vrm.scene.position.z = THREE.MathUtils.lerp(
-          vrm.scene.position.z,  hp.z * 0.5, L * 0.4
-        );
-      }
-    }
-
-    // ── Spine & Chest ─────────────────────────────────────────────────────────
-    // Official Kalidokit pattern: use Spine data for BOTH spine & chest,
-    // with different dampeners so the chest moves less than the spine.
-    // Using riggedPose.Chest directly can fail because Kalidokit may not
-    // always populate that key.
-    const spineLean = riggedPose.Spine && {
-      x: riggedPose.Spine.x,
-      y: 0,
-      z: riggedPose.Spine.z,
-    };
-    this._rigRotation(VRMHumanBoneName.Spine, spineLean, 0.45, L);
-    this._rigRotation(VRMHumanBoneName.Chest, spineLean, 0.25, L);
-
-    // ── Neck & Head ───────────────────────────────────────────────────────────
-    this._rigRotation(VRMHumanBoneName.Neck, riggedPose.Neck, 0.7, L);
-    this._rigRotation(VRMHumanBoneName.Head, riggedPose.Head, 0.7, L);
-
-    // ── Arms — dampener=1: full range so lifting arms actually works ──────────
-    this._rigRotation(VRMHumanBoneName.RightUpperArm, riggedPose.RightUpperArm, 1, L);
-    this._rigRotation(VRMHumanBoneName.RightLowerArm, riggedPose.RightLowerArm, 1, L);
-    this._rigRotation(VRMHumanBoneName.LeftUpperArm,  riggedPose.LeftUpperArm,  1, L);
-    this._rigRotation(VRMHumanBoneName.LeftLowerArm,  riggedPose.LeftLowerArm,  1, L);
-
-    // Keep wrist direction alive even when the detailed hand detector drops.
-    this._rigRotation(VRMHumanBoneName.RightHand, riggedPose.RightHand, 1, L);
-    this._rigRotation(VRMHumanBoneName.LeftHand, riggedPose.LeftHand, 1, L);
-
-    // ── Legs, Feet & Toes ─────────────────────────────────────────────────────
-    this._rigRotation(VRMHumanBoneName.RightUpperLeg, riggedPose.RightUpperLeg, 1, L);
-    this._rigRotation(VRMHumanBoneName.RightLowerLeg, riggedPose.RightLowerLeg, 1, L);
-    this._rigRotation(VRMHumanBoneName.LeftUpperLeg,  riggedPose.LeftUpperLeg,  1, L);
-    this._rigRotation(VRMHumanBoneName.LeftLowerLeg,  riggedPose.LeftLowerLeg,  1, L);
-    this._rigRotation(VRMHumanBoneName.RightFoot,     riggedPose.RightFoot,     1, L);
-    this._rigRotation(VRMHumanBoneName.LeftFoot,      riggedPose.LeftFoot,      1, L);
-    this._rigRotation(VRMHumanBoneName.RightToes,     riggedPose.RightFoot,     0.5, L);
-    this._rigRotation(VRMHumanBoneName.LeftToes,      riggedPose.LeftFoot,      0.5, L);
   }
 
   // ─── Face Application ────────────────────────────────────────────────────────
@@ -445,9 +343,8 @@ export class VRMAvatar {
   }
 
   _resetTrackingState() {
-    this._pose2DFilter.reset();
     this._pose3DFilter.reset();
-    this._torsoOrientation.reset();
+    this._bodyRetargeter?._captureRestPose();
     this._lastHandSeen.Left = 0;
     this._lastHandSeen.Right = 0;
   }
