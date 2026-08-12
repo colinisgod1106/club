@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { VRMHumanBoneName as B } from '@pixiv/three-vrm';
-import { DirectPoseRetargeter, solveLocalAimQuaternion } from '../src/directPoseRetargeter.js';
+import {
+  DirectPoseRetargeter,
+  calibratedBodyDelta,
+  solveLocalAimQuaternion,
+} from '../src/directPoseRetargeter.js';
 
 const EPSILON = 1e-6;
 
@@ -34,6 +38,29 @@ test('aim solver produces finite normalized quaternions for opposite directions'
 
   assert.ok([...solved.toArray()].every(Number.isFinite));
   assert.ok(Math.abs(solved.length() - 1) < EPSILON);
+});
+
+test('neutral calibration removes persistent camera pitch bias', () => {
+  const cameraBias = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(THREE.MathUtils.degToRad(-18), 0, 0, 'YXZ'),
+  );
+  const corrected = calibratedBodyDelta(cameraBias, cameraBias);
+  assert.ok(corrected.angleTo(new THREE.Quaternion()) < EPSILON);
+});
+
+test('calibration keeps yaw one-to-one while softening torso lean', () => {
+  const neutral = new THREE.Quaternion();
+  const measured = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(THREE.MathUtils.degToRad(20), THREE.MathUtils.degToRad(45), 0, 'YXZ'),
+  );
+  const correctedEuler = new THREE.Euler(0, 0, 0, 'YXZ').setFromQuaternion(
+    calibratedBodyDelta(measured, neutral),
+    'YXZ',
+  );
+
+  assert.ok(Math.abs(THREE.MathUtils.radToDeg(correctedEuler.y) - 45) < 0.01);
+  assert.ok(THREE.MathUtils.radToDeg(correctedEuler.x) < 12);
+  assert.ok(THREE.MathUtils.radToDeg(correctedEuler.x) > 9);
 });
 
 function makeNode(parent, position) {

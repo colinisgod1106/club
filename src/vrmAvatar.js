@@ -26,6 +26,7 @@ export class VRMAvatar {
     this._pose3DFilter = new LandmarkStabilizer({ minAlpha: 0.42, maxAlpha: 0.88 });
     this._bodyRetargeter = null;
     this._lastHandSeen = { Left: 0, Right: 0 };
+    this._wasBound = false;
 
     this._initScene();
     this._initLights();
@@ -178,7 +179,16 @@ export class VRMAvatar {
    * @param {HTMLVideoElement} videoEl - The video element (needed for Kalidokit aspect ratio)
    */
   updateMotion(results, isBound, videoEl) {
-    if (!this.currentVrm || !isBound) return;
+    if (!this.currentVrm || !isBound) {
+      this._wasBound = false;
+      return;
+    }
+
+    if (!this._wasBound) {
+      this._pose3DFilter.reset();
+      this._bodyRetargeter?.reset();
+      this._wasBound = true;
+    }
 
     const rawPoseLandmarks = results.poseLandmarks;
     // poseWorldLandmarks gives metric 3-D coords; fall back gracefully
@@ -196,7 +206,7 @@ export class VRMAvatar {
     // Body motion is solved directly from metric 3D joint directions. Kalidokit
     // remains only for face/finger detail; its approximate body Euler solver is
     // deliberately bypassed.
-    this._bodyRetargeter?.update(pose3DLandmarks, 1 - this.smoothingFactor * 0.65);
+    this._bodyRetargeter?.update(pose3DLandmarks, 1 - this.smoothingFactor * 0.48);
 
     const Kali = window.Kalidokit;
     if (!Kali) return;
@@ -344,9 +354,10 @@ export class VRMAvatar {
 
   _resetTrackingState() {
     this._pose3DFilter.reset();
-    this._bodyRetargeter?._captureRestPose();
+    this._bodyRetargeter?.reset();
     this._lastHandSeen.Left = 0;
     this._lastHandSeen.Right = 0;
+    this._wasBound = false;
   }
 
   // ─── Resize & Render Loop ────────────────────────────────────────────────────

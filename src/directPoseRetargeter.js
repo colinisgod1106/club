@@ -13,16 +13,17 @@ const L = {
 };
 
 const CHAINS = [
-  [VRMHumanBoneName.Spine, [L.leftHip, L.rightHip], [L.leftShoulder, L.rightShoulder], 0.5],
-  [VRMHumanBoneName.RightUpperArm, L.rightShoulder, L.rightElbow, 0.75],
-  [VRMHumanBoneName.RightLowerArm, L.rightElbow, L.rightWrist, 0.82],
-  [VRMHumanBoneName.LeftUpperArm, L.leftShoulder, L.leftElbow, 0.75],
-  [VRMHumanBoneName.LeftLowerArm, L.leftElbow, L.leftWrist, 0.82],
-  [VRMHumanBoneName.RightUpperLeg, L.rightHip, L.rightKnee, 0.68],
-  [VRMHumanBoneName.RightLowerLeg, L.rightKnee, L.rightAnkle, 0.78],
+  [VRMHumanBoneName.RightShoulder, [L.leftShoulder, L.rightShoulder], L.rightShoulder, 0.55],
+  [VRMHumanBoneName.LeftShoulder, [L.leftShoulder, L.rightShoulder], L.leftShoulder, 0.55],
+  [VRMHumanBoneName.RightUpperArm, L.rightShoulder, L.rightElbow, 0.58],
+  [VRMHumanBoneName.RightLowerArm, L.rightElbow, L.rightWrist, 0.62],
+  [VRMHumanBoneName.LeftUpperArm, L.leftShoulder, L.leftElbow, 0.58],
+  [VRMHumanBoneName.LeftLowerArm, L.leftElbow, L.leftWrist, 0.62],
+  [VRMHumanBoneName.RightUpperLeg, L.rightHip, L.rightKnee, 0.58],
+  [VRMHumanBoneName.RightLowerLeg, L.rightKnee, L.rightAnkle, 0.62],
   [VRMHumanBoneName.RightFoot, L.rightAnkle, L.rightFoot, 0.7],
-  [VRMHumanBoneName.LeftUpperLeg, L.leftHip, L.leftKnee, 0.68],
-  [VRMHumanBoneName.LeftLowerLeg, L.leftKnee, L.leftAnkle, 0.78],
+  [VRMHumanBoneName.LeftUpperLeg, L.leftHip, L.leftKnee, 0.58],
+  [VRMHumanBoneName.LeftLowerLeg, L.leftKnee, L.leftAnkle, 0.62],
   [VRMHumanBoneName.LeftFoot, L.leftAnkle, L.leftFoot, 0.7],
 ];
 
@@ -33,6 +34,8 @@ const _parentWorld = new THREE.Quaternion();
 const _baseWorld = new THREE.Quaternion();
 const _swing = new THREE.Quaternion();
 const _targetLocal = new THREE.Quaternion();
+const _neutralInverse = new THREE.Quaternion();
+const _relativeEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 
 function confidence(point) {
   return point?.visibility ?? point?.presence ?? 1;
@@ -64,6 +67,21 @@ export function solveLocalAimQuaternion(parentWorld, restLocal, restAxisLocal, d
   return _targetLocal.clone().normalize();
 }
 
+function deadZone(value, radians) {
+  if (Math.abs(value) <= radians) return 0;
+  return value - Math.sign(value) * radians;
+}
+
+export function calibratedBodyDelta(measured, neutral, pitchScale = 0.62, rollScale = 0.72) {
+  _neutralInverse.copy(neutral).invert();
+  const relative = measured.clone().multiply(_neutralInverse).normalize();
+  _relativeEuler.setFromQuaternion(relative, 'YXZ');
+  _relativeEuler.x = deadZone(_relativeEuler.x, THREE.MathUtils.degToRad(2.5)) * pitchScale;
+  _relativeEuler.z = deadZone(_relativeEuler.z, THREE.MathUtils.degToRad(2.5)) * rollScale;
+  // Yaw is intentionally not damped: turning should remain one-to-one.
+  return new THREE.Quaternion().setFromEuler(_relativeEuler).normalize();
+}
+
 /**
  * Retargets MediaPipe's metric 3D joints directly to the normalized VRM rig.
  * No guessed Euler angles are involved: every limb bone aims at its detected
@@ -74,7 +92,20 @@ export class DirectPoseRetargeter {
     this.vrm = vrm;
     this.bindings = new Map();
     this.root = null;
+    this.neutralBasis = null;
+    this.calibrationFrames = 0;
     this._captureRestPose();
+  }
+
+  resetCalibration() {
+    this.neutralBasis = null;
+    this.calibrationFrames = 0;
+  }
+
+  reset() {
+    this.bindings.clear();
+    this._captureRestPose();
+    this.resetCalibration();
   }
 
   _captureRestPose() {
@@ -124,7 +155,8 @@ export class DirectPoseRetargeter {
   _aimChild(boneName) {
     const humanoid = this.vrm.humanoid;
     const map = {
-      [VRMHumanBoneName.Spine]: VRMHumanBoneName.Chest,
+      [VRMHumanBoneName.RightShoulder]: VRMHumanBoneName.RightUpperArm,
+      [VRMHumanBoneName.LeftShoulder]: VRMHumanBoneName.LeftUpperArm,
       [VRMHumanBoneName.RightUpperArm]: VRMHumanBoneName.RightLowerArm,
       [VRMHumanBoneName.RightLowerArm]: VRMHumanBoneName.RightHand,
       [VRMHumanBoneName.LeftUpperArm]: VRMHumanBoneName.LeftLowerArm,
@@ -182,7 +214,18 @@ export class DirectPoseRetargeter {
     const measuredBasis = new THREE.Quaternion().setFromRotationMatrix(
       new THREE.Matrix4().makeBasis(right, up, forward),
     );
-    const delta = measuredBasis.multiply(this.root.restBasis.clone().invert());
+
+    // Learn the camera/person neutral stance after binding. MediaPipe world
+    // depth commonly contains a persistent pitch bias; treating it as motion is
+    // what made an upright person look as if they were leaning backwards.
+    if (this.calibrationFrames < 12) {
+      if (!this.neutralBasis) this.neutralBasis = measuredBasis.clone();
+      else this.neutralBasis.slerp(measuredBasis, 1 / (this.calibrationFrames + 1));
+      this.calibrationFrames++;
+      return;
+    }
+
+    const delta = calibratedBodyDelta(measuredBasis, this.neutralBasis);
     const parent = this.root.bone.parent;
     parent.getWorldQuaternion(_parentWorld);
     const target = _parentWorld.clone().invert().multiply(delta).multiply(_parentWorld).multiply(this.root.restLocal);
